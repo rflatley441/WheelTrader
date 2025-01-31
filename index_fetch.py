@@ -91,6 +91,6 @@ def NASDAQ_fetch():
 
     print(f'Data has been saved to {csv_filename}')
 
-# SP_fetch()
-# DOW_fetch()
+SP_fetch()
+DOW_fetch()
 NASDAQ_fetch()
