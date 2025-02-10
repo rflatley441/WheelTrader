@@ -6,40 +6,20 @@ from multiprocess import Pool
 
 
 
-def gbm(s0, mu, sigma, deltaT, dt):
-    """
-    Models a stock price S(t) using the Wiener process W(t) as
-    `S(t) = S(0).exp{(mu-(sigma^2/2).t)+sigma.W(t)}`
-    
-    Arguments:
-        s0: Initial stock price, default 100
-        mu: 'Drift' of the stock (upwards or downwards), default 0.2
-        sigma: 'Volatility' of the stock, default 0.68
-        deltaT: The time period for which the future prices are computed, default 52 (as in 52 weeks)
-        dt: The granularity of the time-period, default 0.1
-    
-    Returns:
-        time_vector: array of time steps
-        s: array with the simulated stock prices over the time-period deltaT
-    """
-    n_step = int(deltaT / dt)  # Number of time steps
-    time_vector = np.linspace(0, deltaT, num=n_step)  # Time vector
-    
-    # Wiener process: cumulative sum of random normal increments
-    random_increments = np.random.normal(0, 1, size=n_step) * np.sqrt(dt)
-    weiner_process = np.cumsum(random_increments)
-    
-    # Stock price simulation
-    stock_var = (mu - (sigma**2 / 2)) * time_vector
-    s = s0 * np.exp(stock_var + sigma * weiner_process)
-    
-    return s
+def gbm(S0, mu, sigma, T, num_simulations=500):
+    steps = T  # Steps should match the number of days to expiration
+    dt = 1  # Daily time step
+    Z = np.random.standard_normal((steps, num_simulations))
+    drift = (mu - 0.5 * sigma ** 2) * dt
+    diffusion = sigma * np.sqrt(dt) * Z
+    price_paths = np.exp(drift + diffusion).cumprod(axis=0)  
+    return S0 * price_paths  # Remove extra row
 
 
 def objective(params, real_prices, s0):
     """Objective function for optimization."""
     mu, sigma = params
-    gbm_prices = gbm(s0, mu, sigma, deltaT=len(real_prices), dt=1)
+    gbm_prices = gbm(s0, mu, sigma, T=len(real_prices))
 
     if len(gbm_prices) != len(real_prices):
         raise ValueError("Mismatch in GBM output size and real_prices length.")
