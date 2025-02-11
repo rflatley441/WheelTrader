@@ -6,28 +6,27 @@ from multiprocess import Pool
 
 
 
-def gbm(s0, mu, sigma, deltaT, dt):
+def gbm(s0, mu, sigma, deltaT, dt, simulations):
     """
-    Models a stock price S(t) using the Wiener process W(t) as
-    `S(t) = S(0).exp{(mu-(sigma^2/2).t)+sigma.W(t)}`
+    Models multiple stock price simulations using the Wiener process.
     
     Arguments:
-        s0: Initial stock price, default 100
-        mu: 'Drift' of the stock (upwards or downwards), default 0.2
-        sigma: 'Volatility' of the stock, default 0.68
-        deltaT: The time period for which the future prices are computed, default 52 (as in 52 weeks)
-        dt: The granularity of the time-period, default 0.1
+        s0: Initial stock price
+        mu: Drift of the stock
+        sigma: Volatility of the stock
+        deltaT: Time period for which future prices are computed
+        dt: Granularity of the time-period
+        simulations: Number of simulations to run
     
     Returns:
-        time_vector: array of time steps
-        s: array with the simulated stock prices over the time-period deltaT
+        s: A 2D array with simulated stock prices for each simulation (rows) and each time step (columns)
     """
-    n_step = int(deltaT / dt)  # Number of time steps
-    time_vector = np.linspace(0, deltaT, num=n_step)  # Time vector
+    n_step = int(deltaT / dt)
+    time_vector = np.linspace(0, deltaT, num=n_step)
     
     # Wiener process: cumulative sum of random normal increments
-    random_increments = np.random.normal(0, 1, size=n_step) * np.sqrt(dt)
-    weiner_process = np.cumsum(random_increments)
+    random_increments = np.random.normal(0, 1, size=(simulations, n_step)) * np.sqrt(dt)
+    weiner_process = np.cumsum(random_increments, axis=1)
     
     # Stock price simulation
     stock_var = (mu - (sigma**2 / 2)) * time_vector
@@ -39,7 +38,7 @@ def gbm(s0, mu, sigma, deltaT, dt):
 def objective(params, real_prices, s0):
     """Objective function for optimization."""
     mu, sigma = params
-    gbm_prices = gbm(s0, mu, sigma, deltaT=len(real_prices), dt=1)
+    gbm_prices = gbm(s0, mu, sigma, deltaT=len(real_prices), dt=1, simulations=500)
 
     if len(gbm_prices) != len(real_prices):
         raise ValueError("Mismatch in GBM output size and real_prices length.")
@@ -47,15 +46,14 @@ def objective(params, real_prices, s0):
     return mean_squared_error(real_prices, gbm_prices) 
 
 
-def process_bin(i, real_prices, bin_length, bounds):
+def process_bin(i, real_prices, bin_length, bounds, simulation_attempts):
     """Process a single bin to optimize μ and σ."""
     bin_prices = real_prices[i * bin_length : (i + 1) * bin_length]
     s0 = bin_prices[0]
-    result = differential_evolution(objective, bounds, args=(bin_prices, s0))
+    result = differential_evolution(objective, bounds, args=(bin_prices, s0, simulation_attempts))
     return (result.x[0], result.x[1], result.fun)
 
-
-def optimize_gbm(symbol: str, training_period: str, bin_length: int):
+def optimize_gbm(symbol: str, training_period: str, bin_length: int, simulation_attempts: int):
     """
     Optimize μ and σ over multiple time bins using multiprocessing.
     """
@@ -66,7 +64,7 @@ def optimize_gbm(symbol: str, training_period: str, bin_length: int):
     weights = np.linspace(1, 2, num_bins)  
     bounds = [(-0.3, 0.3), (0.001, 0.35)]
 
-    tasks = [(i, real_prices, bin_length, bounds) for i in range(num_bins)]
+    tasks = [(i, real_prices, bin_length, bounds, simulation_attempts) for i in range(num_bins)]
 
     with Pool() as pool:
         results = pool.starmap(process_bin, tasks)
