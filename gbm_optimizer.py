@@ -46,7 +46,7 @@ def process_bin(i, real_prices, bin_length, bounds):
     """Process a single bin to optimize μ and σ."""
     bin_prices = real_prices[i * bin_length : (i + 1) * bin_length]
     s0 = bin_prices[0]
-    result = differential_evolution(objective, bounds, args=(bin_prices, s0))
+    result = differential_evolution(objective, bounds, args=(bin_prices, s0), disp=False)
     return result.x[0], result.x[1], result.fun
 
 def optimize_gbm(symbol: str, training_period: str, bin_length: int):
@@ -54,7 +54,7 @@ def optimize_gbm(symbol: str, training_period: str, bin_length: int):
     Optimize μ and σ over multiple time bins using differential evolution.
     """
     # Download stock data from Yahoo Finance
-    stock_data = yf.download(symbol, period=training_period, interval="1d")
+    stock_data = yf.download(symbol, period=training_period, interval="1d", progress=False)
     real_prices = stock_data["Close"].dropna().values
 
     num_bins = len(real_prices) // bin_length
