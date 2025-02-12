@@ -32,15 +32,6 @@ def gbm(s0, mu, sigma, deltaT, dt):
     
     return s
 
-def simulate_gbm(s0, mu, sigma, days_to_expiration, n_simulations):
-    dt = 1
-    drift = (mu - 0.5 * sigma**2) * dt
-    diffusion = sigma * np.sqrt(dt)
-    random_shocks = np.random.normal(0, 1, (days_to_expiration, n_simulations))
-    prices = s0 * np.exp(np.cumsum(drift + diffusion * random_shocks, axis=0))
-    return prices
-
-
 def objective(params, real_prices, s0):
     """Objective function for optimization to minimize MSE."""
     mu, sigma = params
