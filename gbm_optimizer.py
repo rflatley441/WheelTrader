@@ -2,7 +2,6 @@ import numpy as np
 import yfinance as yf
 from scipy.optimize import differential_evolution
 from sklearn.metrics import mean_squared_error
-from multiprocess import Pool
 
 
 def gbm(s0, mu, sigma, deltaT, dt):
