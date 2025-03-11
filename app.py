@@ -17,21 +17,6 @@ from sklearn.preprocessing import MinMaxScaler
 
 st.set_page_config(page_title="CSP Analyzer", layout="wide")
 
-def load_config():
-    """Load configuration settings"""
-    try:
-        with open("config.json", "r") as config_file:
-            config = json.load(config_file)
-            return config.get("api_key", ""), config.get("secret_key", "")
-    except FileNotFoundError:
-        st.sidebar.warning("config.json not found. Using empty API credentials.")
-        return "", ""
-    except json.JSONDecodeError:
-        st.sidebar.warning("Invalid config.json format. Using empty API credentials.")
-        return "", ""
-
-api_key, secret_key = load_config()
-
 # Default stocks list (from your notebook)
 default_stocks = ["CHWY", "IBIT", "ASO", "MARA", "ET", "DVN", "INTC", "SPLG", "TOST", "NBIS", "ON"]
 too_expensive = ["HIMS", "TEM"]
