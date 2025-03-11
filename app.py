@@ -23,13 +23,13 @@ too_expensive = ["HIMS", "TEM"]
 
 # Sidebar header
 st.sidebar.title("CSP Analysis Tool")
-st.sidebar.markdown("Analyze covered stock puts for potential investment opportunities")
+st.sidebar.markdown("Analyze cash secured puts for potential investment opportunities")
 
 # Sidebar controls
 analysis_mode = st.sidebar.radio("Analysis Mode", ["CSP Screening", "Stock Trend Analysis"])
 
 if analysis_mode == "CSP Screening":
-    st.title("Covered Stock Puts (CSP) Analyzer")
+    st.title("Cash Secured Puts (CSP) Analyzer")
     
     # Date selector for expiration
     today = datetime.today()
@@ -42,13 +42,13 @@ if analysis_mode == "CSP Screening":
     
     # Stock selection
     st.sidebar.subheader("Stock Selection")
-    use_default_list = st.sidebar.checkbox("Use default stock list", value=True)
+    use_default_list = st.sidebar.checkbox("Use default stock list", value=False)
     
     if use_default_list:
         selected_stocks = st.sidebar.multiselect(
             "Select stocks to analyze",
             options=default_stocks,
-            default=["NBIS"]
+            default=["NBIS, INTC, TEM"]
         )
     else:
         custom_stocks = st.sidebar.text_input("Enter stock symbols (comma separated)", "SPY, QQQ")
