@@ -267,6 +267,13 @@ if analysis_mode == "Cash Secured Puts Analysis":
         if all_results:
             combined_results = pd.concat(all_results)
             
+            # Store results and parameters in session_state
+            st.session_state['csp_combined_results'] = combined_results
+            st.session_state['csp_optimized_sigma'] = optimized_sigma
+            st.session_state['csp_days_to_expiration'] = days_to_expiration
+            st.session_state['csp_simulation_attempts'] = simulation_attempts
+            st.session_state['csp_expiration_date'] = expiration_date
+            
             with results_container:
                 st.subheader("Top CSP Opportunities")
                 
@@ -405,6 +412,134 @@ if analysis_mode == "Cash Secured Puts Analysis":
                     """)
         else:
             st.warning("No valid CSP options found for the selected stocks and parameters.")
+
+    # Use session_state for selectbox and details if available
+    if 'csp_combined_results' in st.session_state:
+        combined_results = st.session_state['csp_combined_results']
+        optimized_sigma = st.session_state['csp_optimized_sigma']
+        days_to_expiration = st.session_state['csp_days_to_expiration']
+        simulation_attempts = st.session_state['csp_simulation_attempts']
+        expiration_date = st.session_state['csp_expiration_date']
+        # ... display selectbox and details as before ...
+        st.subheader("Top CSP Opportunities")
+        top_results = combined_results.sort_values('score', ascending=False).head(10)
+        display_cols = [
+            'symbol', 'strike', 'current_price', 'profitability_likelihood', 
+            'ROI', 'mid_price', 'openInterest', 'volume', 'score'
+        ]
+        if all(col in top_results.columns for col in display_cols):
+            display_df = top_results[display_cols].copy()
+            display_df['profitability_likelihood'] = display_df['profitability_likelihood'].apply(lambda x: f"{x:.1f}%")
+            display_df['ROI'] = display_df['ROI'].apply(lambda x: f"{x:.2f}%")
+            display_df['score'] = display_df['score'].apply(lambda x: f"{x:.3f}")
+            display_df['current_price'] = display_df['current_price'].apply(lambda x: f"${x:.2f}")
+            display_df['strike'] = display_df['strike'].apply(lambda x: f"${x:.2f}")
+            display_df['mid_price'] = display_df['mid_price'].apply(lambda x: f"${x:.2f}")
+            st.dataframe(display_df)
+        else:
+            missing_cols = [col for col in display_cols if col not in top_results.columns]
+            st.error(f"Missing columns in results: {', '.join(missing_cols)}")
+            st.dataframe(top_results)
+        st.subheader("Risk vs. Reward Analysis")
+        fig = px.scatter(
+            combined_results, 
+            x='profitability_likelihood', 
+            y='ROI',
+            size='openInterest',
+            color='symbol',
+            hover_data=['strike', 'current_price', 'sortino_ratio', 'score'],
+            title='CSP Risk-Reward Profile',
+            labels={
+                'profitability_likelihood': 'Probability of Success (%)',
+                'ROI': 'Return on Investment (%)'
+            }
+        )
+        fig.update_layout(
+            xaxis_title='Probability of Success (%)',
+            yaxis_title='Return on Investment (%)',
+            legend_title='Symbol',
+            height=600
+        )
+        st.plotly_chart(fig, use_container_width=True)
+        st.subheader("Individual Option Analysis")
+        selected_option = st.selectbox(
+            "Select an option to view detailed analysis",
+            options=combined_results.index,
+            format_func=lambda idx: (
+                f"{combined_results.at[idx, 'symbol']} - "
+                f"Strike ${combined_results.at[idx, 'strike']:.2f} "
+                f"(Score: {combined_results.at[idx, 'score']:.3f})"
+            )
+        )
+        if selected_option is not None:
+            option_data = combined_results.loc[selected_option]
+            col1, col2 = st.columns(2)
+            with col1:
+                st.subheader(f"{option_data['symbol']} - ${option_data['strike']} Strike")
+                st.metric("Current Stock Price", f"${option_data['current_price']:.2f}")
+                st.metric("Option Premium", f"${option_data['mid_price']:.2f}")
+                st.metric("Return on Investment", f"{option_data['ROI']:.2f}%")
+                st.metric("Success Probability", f"{option_data['profitability_likelihood']:.2f}%")
+            with col2:
+                st.subheader("Contract Details")
+                st.metric("Open Interest", f"{option_data['openInterest']}")
+                st.metric("Volume", f"{option_data['volume']}")
+                st.metric("Sortino Ratio", f"{option_data['sortino_ratio']:.3f}")
+                st.metric("Score", f"{option_data['score']:.3f}")
+            st.subheader("Simulated Price Distribution at Expiration")
+            avg_final_price = option_data['final_price']
+            current_price = float(option_data['current_price'])
+            strike_price = float(option_data['strike'])
+            simulated_prices = np.random.normal(
+                avg_final_price, 
+                optimized_sigma * np.sqrt(days_to_expiration) * current_price,
+                1000
+            )
+            fig = go.Figure()
+            fig.add_trace(go.Histogram(
+                x=simulated_prices,
+                name='Simulated Final Prices',
+                opacity=0.75,
+                nbinsx=50
+            ))
+            fig.add_vline(
+                x=current_price, 
+                line_dash="dash", 
+                line_color="blue",
+                annotation_text="Current Price"
+            )
+            fig.add_vline(
+                x=strike_price, 
+                line_dash="dash", 
+                line_color="red",
+                annotation_text="Strike Price"
+            )
+            fig.add_vline(
+                x=avg_final_price, 
+                line_dash="solid", 
+                line_color="green",
+                annotation_text="Average Final Price"
+            )
+            fig.update_layout(
+                title=f"Simulated Price Distribution for {option_data['symbol']} at Expiration",
+                xaxis_title="Stock Price ($)",
+                yaxis_title="Frequency",
+                showlegend=True,
+                height=500
+            )
+            st.plotly_chart(fig, use_container_width=True)
+            st.markdown("### Analysis Explanation")
+            st.markdown(f"""
+            This analysis simulates {simulation_attempts} potential price paths for {option_data['symbol']} 
+            from today until the expiration date ({expiration_date.strftime('%Y-%m-%d')}). The simulation uses 
+            a Geometric Brownian Motion model with optimized parameters based on historical data.
+            
+            - **Success Probability**: {option_data['profitability_likelihood']:.2f}% chance the option expires worthless (stock above strike)
+            - **Potential Return**: {option_data['ROI']:.2f}% return on investment if the option expires worthless
+            - **Sortino Ratio**: {option_data['sortino_ratio']:.3f} (higher is better, measures return relative to downside risk)
+            
+            If assigned, your cost basis would be ${float(strike_price) - float(option_data['mid_price']):.2f} per share.
+            """)
 
 elif analysis_mode == "Stock Trend Analysis":
     st.title("Stock Trend Analysis")
@@ -1005,6 +1140,12 @@ elif analysis_mode == "Covered Calls Analysis":
                 contracts['score'] = temp_contracts['score']
                 return contracts.sort_values(by='score', ascending=False)
             call_chain = select_optimal_contract(call_chain)
+            # Store results and parameters in session_state
+            st.session_state['cc_call_chain'] = call_chain
+            st.session_state['cc_optimized_sigma'] = optimized_sigma
+            st.session_state['cc_days_to_expiration'] = days_to_expiration
+            st.session_state['cc_simulation_attempts'] = simulation_attempts
+            st.session_state['cc_expiration_date'] = expiration_date
             with results_container:
                 st.subheader("Top Covered Call Opportunities")
                 display_cols = [
