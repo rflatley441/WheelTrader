@@ -15,20 +15,19 @@ import requests
 from yahooquery import Ticker
 from sklearn.preprocessing import MinMaxScaler
 
-st.set_page_config(page_title="CSP Analyzer", layout="wide")
-
-# Default stocks list (from your notebook)
+# Default stocks list
 default_stocks = ["CHWY", "IBIT", "ASO", "MARA", "ET", "DVN", "INTC", "SPLG", "TOST", "NBIS", "ON"]
-too_expensive = ["HIMS", "TEM"]
+
+st.set_page_config(page_title="Wheel Trading", layout="wide")
 
 # Sidebar header
-st.sidebar.title("CSP Analysis Tool")
-st.sidebar.markdown("Analyze cash secured puts for potential investment opportunities")
+st.sidebar.title("Wheel Trading")
+st.sidebar.markdown("Analyze covered option contracts for potential investment opportunities")
 
 # Sidebar controls
-analysis_mode = st.sidebar.radio("Analysis Mode", ["CSP Screening", "Stock Trend Analysis", "Covered Calls Analysis"])
+analysis_mode = st.sidebar.radio("Analysis Mode", ["Cash Secured Puts Analysis", "Stock Trend Analysis", "Covered Calls Analysis"])
 
-if analysis_mode == "CSP Screening":
+if analysis_mode == "Cash Secured Puts Analysis":
     st.title("Cash Secured Puts (CSP) Analyzer")
     
     # Date selector for expiration
@@ -42,17 +41,9 @@ if analysis_mode == "CSP Screening":
     
     # Stock selection
     st.sidebar.subheader("Stock Selection")
-    use_default_list = st.sidebar.checkbox("Use default stock list", value=False)
-    
-    if use_default_list:
-        selected_stocks = st.sidebar.multiselect(
-            "Select stocks to analyze",
-            options=default_stocks,
-            default=["NBIS, INTC, TEM"]
-        )
-    else:
-        custom_stocks = st.sidebar.text_input("Enter stock symbols (comma separated)", "SPY, QQQ")
-        selected_stocks = [symbol.strip() for symbol in custom_stocks.split(",")]
+
+    custom_stocks = st.sidebar.text_input("Enter stock symbols (comma separated)", "SPY, QQQ")
+    selected_stocks = [symbol.strip() for symbol in custom_stocks.split(",")]
     
     # Start analysis button
     start_analysis = st.sidebar.button("Analyze CSP Options")
