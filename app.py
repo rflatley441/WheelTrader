@@ -26,7 +26,7 @@ st.sidebar.title("CSP Analysis Tool")
 st.sidebar.markdown("Analyze cash secured puts for potential investment opportunities")
 
 # Sidebar controls
-analysis_mode = st.sidebar.radio("Analysis Mode", ["CSP Screening", "Stock Trend Analysis"])
+analysis_mode = st.sidebar.radio("Analysis Mode", ["CSP Screening", "Stock Trend Analysis", "Covered Calls Analysis"])
 
 if analysis_mode == "CSP Screening":
     st.title("Cash Secured Puts (CSP) Analyzer")
@@ -333,7 +333,6 @@ if analysis_mode == "CSP Screening":
                 
                 # Detailed view of individual options
                 st.subheader("Individual Option Analysis")
-                
                 selected_option = st.selectbox(
                     "Select an option to view detailed analysis",
                     options=combined_results.index,
@@ -343,74 +342,56 @@ if analysis_mode == "CSP Screening":
                         f"(Score: {combined_results.at[idx, 'score']:.3f})"
                     )
                 )
-                
                 if selected_option is not None:
                     option_data = combined_results.loc[selected_option]
-                    
                     col1, col2 = st.columns(2)
-                    
                     with col1:
                         st.subheader(f"{option_data['symbol']} - ${option_data['strike']} Strike")
-                        st.metric("Current Stock Price", f"{option_data['current_price']}")
-                        st.metric("Option Premium", f"{option_data['mid_price']}")
-                        st.metric("Return on Investment", f"{option_data['ROI']}%")
-                        st.metric("Success Probability", f"{option_data['profitability_likelihood']}%")
-                        
+                        st.metric("Current Stock Price", f"${option_data['current_price']:.2f}")
+                        st.metric("Option Premium", f"${option_data['mid_price']:.2f}")
+                        st.metric("Return on Investment", f"{option_data['ROI']:.2f}%")
+                        st.metric("Success Probability", f"{option_data['profitability_likelihood']:.2f}%")
                     with col2:
                         st.subheader("Contract Details")
                         st.metric("Open Interest", f"{option_data['openInterest']}")
                         st.metric("Volume", f"{option_data['volume']}")
                         st.metric("Sortino Ratio", f"{option_data['sortino_ratio']:.3f}")
                         st.metric("Score", f"{option_data['score']:.3f}")
-                    
-                    # Create simulated distribution chart
+                    # Simulated price distribution
                     st.subheader("Simulated Price Distribution at Expiration")
-                    
-                    # We don't have the full distribution, so we'll create a simplified visualization
                     avg_final_price = option_data['final_price']
-                    current_price = option_data['current_price']
-                    strike_price = option_data['strike']
-                    
-                    # Generate a normal distribution around the average final price
+                    current_price = float(option_data['current_price'])
+                    strike_price = float(option_data['strike'])
                     simulated_prices = np.random.normal(
                         avg_final_price, 
                         optimized_sigma * np.sqrt(days_to_expiration) * current_price,
                         1000
                     )
-                    
                     fig = go.Figure()
-                    
-                    # Add distribution histogram
                     fig.add_trace(go.Histogram(
                         x=simulated_prices,
                         name='Simulated Final Prices',
                         opacity=0.75,
                         nbinsx=50
                     ))
-                    
-                    # Add lines for key prices
                     fig.add_vline(
                         x=current_price, 
                         line_dash="dash", 
                         line_color="blue",
                         annotation_text="Current Price"
                     )
-                    
                     fig.add_vline(
                         x=strike_price, 
                         line_dash="dash", 
                         line_color="red",
                         annotation_text="Strike Price"
                     )
-                    
                     fig.add_vline(
                         x=avg_final_price, 
                         line_dash="solid", 
                         line_color="green",
                         annotation_text="Average Final Price"
                     )
-                    
-                    # Update layout
                     fig.update_layout(
                         title=f"Simulated Price Distribution for {option_data['symbol']} at Expiration",
                         xaxis_title="Stock Price ($)",
@@ -418,21 +399,18 @@ if analysis_mode == "CSP Screening":
                         showlegend=True,
                         height=500
                     )
-                    
                     st.plotly_chart(fig, use_container_width=True)
-                    
-                    # Add explanation of the analysis
                     st.markdown("### Analysis Explanation")
                     st.markdown(f"""
                     This analysis simulates {simulation_attempts} potential price paths for {option_data['symbol']} 
                     from today until the expiration date ({expiration_date.strftime('%Y-%m-%d')}). The simulation uses 
                     a Geometric Brownian Motion model with optimized parameters based on historical data.
                     
-                    - **Success Probability**: {option_data['profitability_likelihood']}% chance the option expires worthless (stock above strike)
-                    - **Potential Return**: {option_data['ROI']}% return on investment if the option expires worthless
+                    - **Success Probability**: {option_data['profitability_likelihood']:.2f}% chance the option expires worthless (stock above strike)
+                    - **Potential Return**: {option_data['ROI']:.2f}% return on investment if the option expires worthless
                     - **Sortino Ratio**: {option_data['sortino_ratio']:.3f} (higher is better, measures return relative to downside risk)
                     
-                    If assigned, your cost basis would be ${strike_price - option_data['mid_price']:.2f} per share.
+                    If assigned, your cost basis would be ${float(strike_price) - float(option_data['mid_price']):.2f} per share.
                     """)
         else:
             st.warning("No valid CSP options found for the selected stocks and parameters.")
@@ -904,7 +882,260 @@ elif analysis_mode == "Stock Trend Analysis":
         except Exception as e:
             st.error(f"Error analyzing {ticker_symbol}: {e}")
 
-# Add footer
-st.markdown("---")
-st.markdown("##### CSP Analyzer Tool")
-st.markdown("*This app is for educational purposes only and does not constitute financial advice.*")
+elif analysis_mode == "Covered Calls Analysis":
+    st.title("Covered Calls Analyzer")
+    
+    # Sidebar inputs
+    today = datetime.today()
+    default_expiration = today + timedelta(days=30)
+    expiration_date = st.sidebar.date_input(
+        "Option Expiration Date", 
+        value=default_expiration,
+        min_value=today
+    )
+    ticker = st.sidebar.text_input("Stock Symbol", "NBIS")
+    cost_basis = st.sidebar.number_input("Cost Basis per Share ($)", min_value=0.0, value=30.0, step=0.01)
+    simulation_attempts = st.sidebar.slider("Simulation Attempts", 100, 1000, 300)
+    start_analysis = st.sidebar.button("Analyze Covered Calls")
+
+    if start_analysis and ticker:
+        st.subheader(f"Analyzing covered calls for {ticker} expiring on {expiration_date.strftime('%Y-%m-%d')}")
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        results_container = st.container()
+        
+        def get_option_chain(symbol, option_type="calls", expiration_date=None):
+            try:
+                stock = Ticker(symbol)
+                df = stock.option_chain
+                if df is None or df.empty:
+                    st.warning(f"No option data available for {symbol}.")
+                    return None
+                if expiration_date:
+                    df = df.loc[df.index.get_level_values('expiration') == expiration_date.strftime("%Y-%m-%d")]
+                if option_type in ['calls', 'puts']:
+                    df = df.xs(option_type, level=2)
+                df = df.reset_index()
+                df = df.rename(columns={'expiration': 'expiration_date'})
+                df['mid_price'] = (df['bid'] + df['ask']) / 2
+                df['ROI'] = (df['mid_price'] / df['strike']) * 100
+                df = df[(df['openInterest'] >= 40) & (df['bid'] > 0.00) & (df['ROI'] > 0.1) & (((df['ask'] - df['bid']) / df['bid']) * 100 < 40)]
+                return df
+            except Exception as e:
+                st.error(f"Error fetching option chain for {symbol}: {e}")
+                return None
+        
+        def get_current_stock_price(symbol):
+            ticker = yf.Ticker(symbol)
+            todays_data = ticker.history(period='1d')
+            return todays_data['Close'].iloc[-1]
+        
+        def fit_garch(symbol, period):
+            stock_data = yf.download(symbol, period=period, interval="1d", progress=False, auto_adjust=False)
+            real_prices = stock_data["Close"].dropna().values.flatten()
+            returns = np.diff(np.log(real_prices))
+            model = arch_model(returns, vol='Garch', p=1, q=1, rescale=False)
+            garch_fit = model.fit(disp="off")
+            conditional_volatilities = garch_fit.conditional_volatility
+            N = len(conditional_volatilities)
+            weights = np.linspace(1, 2, N)
+            weighted_volatility = np.sum(weights * conditional_volatilities) / np.sum(weights)
+            return weighted_volatility
+        
+        # Get option chain
+        option_chain = get_option_chain(ticker, option_type="calls", expiration_date=expiration_date)
+        if option_chain is None or option_chain.empty:
+            st.warning(f"No valid call options found for {ticker}")
+        else:
+            price = get_current_stock_price(ticker)
+            optimizer_training_period = "6mo"
+            bin_length = 18
+            days_to_expiration = np.busday_count(datetime.today().date(), expiration_date)
+            with st.spinner(f"Optimizing parameters for {ticker}..."):
+                try:
+                    optimized_mu, optimized_sigma = optimize_gbm(
+                        symbol=ticker, 
+                        training_period=optimizer_training_period, 
+                        bin_length=bin_length
+                    )
+                    optimized_sigma = fit_garch(
+                        symbol=ticker, 
+                        period=optimizer_training_period
+                    )
+                except Exception as e:
+                    st.error(f"Error optimizing parameters for {ticker}: {e}")
+                    st.stop()
+            daily_risk_free_rate = (1 + 0.0419) ** (1/252) - 1
+            call_chain = option_chain.copy()
+            for index, contract in call_chain.iterrows():
+                strike_price = contract['strike']
+                mid_price = (contract['bid'] + contract['ask']) / 2
+                simulated_returns = []
+                simulated_final_prices = []
+                profitable_count = 0
+                for _ in range(simulation_attempts):
+                    prices = gbm(
+                        s0=price, 
+                        mu=optimized_mu, 
+                        sigma=optimized_sigma, 
+                        deltaT=days_to_expiration, 
+                        dt=1
+                    )
+                    final_price = prices[-1]
+                    # Option expires worthless (stock below strike): keep premium
+                    if final_price <= strike_price:
+                        profitable_count += 1
+                        net_return = (mid_price / strike_price) * 100
+                    else:
+                        # Assigned: premium + (strike - cost_basis)
+                        net_return = ((strike_price - (cost_basis - mid_price)) / strike_price) * 100
+                    simulated_returns.append(net_return)
+                    simulated_final_prices.append(final_price)
+                profitability_chance = (profitable_count / simulation_attempts) * 100
+                percent_return = (mid_price / strike_price) * 100
+                avg_price = np.mean(simulated_final_prices)
+                call_chain.at[index, 'mid_price'] = mid_price
+                call_chain.at[index, 'current_price'] = price
+                call_chain.at[index, 'final_price'] = avg_price
+                call_chain.at[index, 'profitability_likelihood'] = profitability_chance
+                call_chain.at[index, 'return_percent'] = percent_return
+                call_chain.at[index, 'return_if_assignment'] = ((strike_price - (cost_basis - mid_price)) / strike_price) * 100
+            # Score the options
+            def select_optimal_contract(contracts):
+                temp_contracts = contracts.copy()
+                scaler = MinMaxScaler()
+                temp_contracts[['profitability_likelihood', 'return_percent']] = scaler.fit_transform(
+                    temp_contracts[['profitability_likelihood', 'return_percent']]
+                )
+                temp_contracts['score'] = (
+                    0.60 * temp_contracts['profitability_likelihood'] +
+                    0.40 * temp_contracts['return_percent']
+                )
+                contracts['score'] = temp_contracts['score']
+                return contracts.sort_values(by='score', ascending=False)
+            call_chain = select_optimal_contract(call_chain)
+            with results_container:
+                st.subheader("Top Covered Call Opportunities")
+                display_cols = [
+                    'symbol', 'strike', 'current_price', 'profitability_likelihood', 
+                    'return_percent', 'mid_price', 'openInterest', 'volume', 'score', 'return_if_assignment'
+                ]
+                if all(col in call_chain.columns for col in display_cols):
+                    display_df = call_chain[display_cols].copy()
+                    display_df['profitability_likelihood'] = display_df['profitability_likelihood'].apply(lambda x: f"{x:.1f}%")
+                    display_df['return_percent'] = display_df['return_percent'].apply(lambda x: f"{x:.2f}%")
+                    display_df['score'] = display_df['score'].apply(lambda x: f"{x:.3f}")
+                    display_df['current_price'] = display_df['current_price'].apply(lambda x: f"${x:.2f}")
+                    display_df['strike'] = display_df['strike'].apply(lambda x: f"${x:.2f}")
+                    display_df['mid_price'] = display_df['mid_price'].apply(lambda x: f"${x:.2f}")
+                    display_df['return_if_assignment'] = display_df['return_if_assignment'].apply(lambda x: f"{x:.2f}%")
+                    st.dataframe(display_df)
+                else:
+                    missing_cols = [col for col in display_cols if col not in call_chain.columns]
+                    st.error(f"Missing columns in results: {', '.join(missing_cols)}")
+                    st.dataframe(call_chain)
+                # Interactive chart
+                st.subheader("Risk vs. Reward Analysis")
+                fig = px.scatter(
+                    call_chain, 
+                    x='profitability_likelihood', 
+                    y='return_percent',
+                    size='openInterest',
+                    color='symbol',
+                    hover_data=['strike', 'current_price', 'score', 'return_if_assignment'],
+                    title='Covered Call Risk-Reward Profile',
+                    labels={
+                        'profitability_likelihood': 'Probability of Expiring Worthless (%)',
+                        'return_percent': 'Return on Investment (%)'
+                    }
+                )
+                fig.update_layout(
+                    xaxis_title='Probability of Expiring Worthless (%)',
+                    yaxis_title='Return on Investment (%)',
+                    legend_title='Symbol',
+                    height=600
+                )
+                st.plotly_chart(fig, use_container_width=True)
+                # Detailed view
+                st.subheader("Individual Option Analysis")
+                selected_option = st.selectbox(
+                    "Select an option to view detailed analysis",
+                    options=call_chain.index,
+                    format_func=lambda idx: (
+                        f"{call_chain.at[idx, 'symbol']} - "
+                        f"Strike ${call_chain.at[idx, 'strike']:.2f} "
+                        f"(Score: {call_chain.at[idx, 'score']:.3f})"
+                    )
+                )
+                if selected_option is not None:
+                    option_data = call_chain.loc[selected_option]
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.subheader(f"{option_data['symbol']} - ${option_data['strike']} Strike")
+                        st.metric("Current Stock Price", f"${option_data['current_price']}")
+                        st.metric("Option Premium", f"${option_data['mid_price']:.2f}")
+                        st.metric("Return on Investment", f"{option_data['return_percent']:.2f}%")
+                        st.metric("Success Probability", f"{option_data['profitability_likelihood']:.2f}%")
+                    with col2:
+                        st.subheader("Contract Details")
+                        st.metric("Open Interest", f"{option_data['openInterest']}")
+                        st.metric("Volume", f"{option_data['volume']}")
+                        st.metric("Score", f"{option_data['score']:.3f}")
+                        st.metric("Return if Assigned", f"{option_data['return_if_assignment']:.2f}%")
+                    # Simulated price distribution
+                    st.subheader("Simulated Price Distribution at Expiration")
+                    avg_final_price = option_data['final_price']
+                    current_price = float(option_data['current_price'])
+                    strike_price = float(option_data['strike'])
+                    simulated_prices = np.random.normal(
+                        avg_final_price, 
+                        optimized_sigma * np.sqrt(days_to_expiration) * current_price,
+                        1000
+                    )
+                    fig = go.Figure()
+                    fig.add_trace(go.Histogram(
+                        x=simulated_prices,
+                        name='Simulated Final Prices',
+                        opacity=0.75,
+                        nbinsx=50
+                    ))
+                    fig.add_vline(
+                        x=current_price, 
+                        line_dash="dash", 
+                        line_color="blue",
+                        annotation_text="Current Price"
+                    )
+                    fig.add_vline(
+                        x=strike_price, 
+                        line_dash="dash", 
+                        line_color="red",
+                        annotation_text="Strike Price"
+                    )
+                    fig.add_vline(
+                        x=avg_final_price, 
+                        line_dash="solid", 
+                        line_color="green",
+                        annotation_text="Average Final Price"
+                    )
+                    fig.update_layout(
+                        title=f"Simulated Price Distribution for {option_data['symbol']} at Expiration",
+                        xaxis_title="Stock Price ($)",
+                        yaxis_title="Frequency",
+                        showlegend=True,
+                        height=500
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                    st.markdown("### Analysis Explanation")
+                    st.markdown(f"""
+                    This analysis simulates {simulation_attempts} potential price paths for {option_data['symbol']} 
+                    from today until the expiration date ({expiration_date.strftime('%Y-%m-%d')}). The simulation uses 
+                    a Geometric Brownian Motion model with optimized parameters based on historical data.
+                    
+                    - **Success Probability**: {option_data['profitability_likelihood']:.2f}% chance the option expires worthless (stock below strike)
+                    - **Potential Return**: {option_data['return_percent']:.2f}% return on investment if the option expires worthless
+                    - **Return if Assigned**: {option_data['return_if_assignment']:.2f}% 
+                    
+                    If assigned, your net sale price would be ${float(strike_price) + float(option_data['mid_price']):.2f} per share.
+                    
+                    """)
+
