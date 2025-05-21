@@ -292,9 +292,12 @@ if analysis_mode == "CSP Screening":
                     display_df = top_results[display_cols].copy()
                     
                     # Format numeric columns
-                    display_df['profitability_likelihood'] = display_df['profitability_likelihood'].round(1).astype(str) + '%'
-                    display_df['ROI'] = display_df['ROI'].round(2).astype(str) + '%'
-                    display_df['score'] = display_df['score'].round(3)
+                    display_df['profitability_likelihood'] = display_df['profitability_likelihood'].apply(lambda x: f"{x:.1f}%")
+                    display_df['ROI'] = display_df['ROI'].apply(lambda x: f"{x:.2f}%")
+                    display_df['score'] = display_df['score'].apply(lambda x: f"{x:.3f}")
+                    display_df['current_price'] = display_df['current_price'].apply(lambda x: f"${x:.2f}")
+                    display_df['strike'] = display_df['strike'].apply(lambda x: f"${x:.2f}")
+                    display_df['mid_price'] = display_df['mid_price'].apply(lambda x: f"${x:.2f}")
                     
                     st.dataframe(display_df)
                 else:
@@ -334,7 +337,11 @@ if analysis_mode == "CSP Screening":
                 selected_option = st.selectbox(
                     "Select an option to view detailed analysis",
                     options=combined_results.index,
-                    format_func=lambda x: f"{combined_results.loc[x, 'symbol']} - Strike ${combined_results.loc[x, 'strike']} (Score: {combined_results.loc[x, 'score']:.3f})"
+                    format_func=lambda idx: (
+                        f"{combined_results.at[idx, 'symbol']} - "
+                        f"Strike ${combined_results.at[idx, 'strike']:.2f} "
+                        f"(Score: {combined_results.at[idx, 'score']:.3f})"
+                    )
                 )
                 
                 if selected_option is not None:
@@ -344,10 +351,10 @@ if analysis_mode == "CSP Screening":
                     
                     with col1:
                         st.subheader(f"{option_data['symbol']} - ${option_data['strike']} Strike")
-                        st.metric("Current Stock Price", f"${option_data['current_price']:.2f}")
-                        st.metric("Option Premium", f"${option_data['mid_price']:.2f}")
-                        st.metric("Return on Investment", f"{option_data['ROI']:.2f}%")
-                        st.metric("Success Probability", f"{option_data['profitability_likelihood']:.1f}%")
+                        st.metric("Current Stock Price", f"{option_data['current_price']}")
+                        st.metric("Option Premium", f"{option_data['mid_price']}")
+                        st.metric("Return on Investment", f"{option_data['ROI']}%")
+                        st.metric("Success Probability", f"{option_data['profitability_likelihood']}%")
                         
                     with col2:
                         st.subheader("Contract Details")
@@ -421,8 +428,8 @@ if analysis_mode == "CSP Screening":
                     from today until the expiration date ({expiration_date.strftime('%Y-%m-%d')}). The simulation uses 
                     a Geometric Brownian Motion model with optimized parameters based on historical data.
                     
-                    - **Success Probability**: {option_data['profitability_likelihood']:.1f}% chance the option expires worthless (stock above strike)
-                    - **Potential Return**: {option_data['ROI']:.2f}% return on investment if the option expires worthless
+                    - **Success Probability**: {option_data['profitability_likelihood']}% chance the option expires worthless (stock above strike)
+                    - **Potential Return**: {option_data['ROI']}% return on investment if the option expires worthless
                     - **Sortino Ratio**: {option_data['sortino_ratio']:.3f} (higher is better, measures return relative to downside risk)
                     
                     If assigned, your cost basis would be ${strike_price - option_data['mid_price']:.2f} per share.
