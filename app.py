@@ -50,7 +50,7 @@ if analysis_mode == "Cash Secured Puts Analysis":
     
     # Analysis parameters
     st.sidebar.subheader("Analysis Parameters")
-    simulation_attempts = st.sidebar.slider("Simulation Attempts", 100, 1000, 500)
+    simulation_attempts = st.sidebar.slider("Simulation Attempts", 100, 500, 250)
     
     if start_analysis and selected_stocks:
         st.subheader(f"Analyzing CSP options for {', '.join(selected_stocks)} expiring on {expiration_date.strftime('%Y-%m-%d')}")
